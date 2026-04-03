@@ -1,5 +1,5 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
+const qrcode = require('qrcode');
 
 const client = new Client({
     authStrategy: new LocalAuth(),
@@ -8,18 +8,21 @@ const client = new Client({
     }
 });
 
-client.on('qr', (qr) => {
+client.on('qr', async (qr) => {
     console.log('QR RECEIVED');
-    qrcode.generate(qr, { small: true });
+
+    const url = await qrcode.toDataURL(qr);
+    console.log('SCAN THIS QR:');
+    console.log(url);
 });
 
 client.on('ready', () => {
-    console.log('BOT WHATSAPP LISTO');
+    console.log('BOT LISTO');
 });
 
-client.on('message', async message => {
-    if (message.body.toLowerCase() === 'hola') {
-        message.reply('Hola 👋 soy la IA de Arrow Store');
+client.on('message', async msg => {
+    if (msg.body.toLowerCase() === 'hola') {
+        msg.reply('Hola 👋 soy la IA de Arrow Store');
     }
 });
 
