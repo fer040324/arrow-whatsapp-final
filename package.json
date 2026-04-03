@@ -1,0 +1,14 @@
+{
+  "name": "arrow-whatsapp-final",
+  "version": "1.0.0",
+  "description": "Arrow WhatsApp AI Bot",
+  "main": "whatsapp-web.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node whatsapp-web.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.18",
+    "pino": "^9.3.2"
+  }
+}
