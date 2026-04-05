@@ -1,44 +1,98 @@
 const express = require("express");
-const { Client, LocalAuth } = require("whatsapp-web.js");
-const qrcode = require("qrcode-terminal");
+const QRCode = require("qrcode");
+const pino = require("pino");
+const {
+  default: makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason
+} = require("@whiskeysockets/baileys");
 
 const app = express();
-app.get("/", (_, res) => res.send("bot activo"));
-app.listen(process.env.PORT || 3000, "0.0.0.0");
+let qrDataUrl = "";
 
-const client = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: {
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--single-process",
-      "--disable-gpu"
-    ]
-  }
+app.get("/", (req, res) => {
+  res.send(`
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Arrow WhatsApp</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 24px; background: #111; color: #fff; }
+          img { max-width: 320px; width: 100%; border-radius: 16px; margin-top: 20px; }
+          .box { display:inline-block; padding:16px 20px; border:1px solid #333; border-radius:16px; margin-top:20px; }
+        </style>
+      </head>
+      <body>
+        <h1>Arrow WhatsApp Final</h1>
+        <div class="box">
+          ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR WhatsApp" />` : "<p>Esperando QR...</p>"}
+        </div>
+        <p>Escaneá el QR desde WhatsApp > Dispositivos vinculados</p>
+      </body>
+    </html>
+  `);
 });
 
-client.on("qr", (qr) => {
-  console.log("QR:");
-  console.log(qr);
-  qrcode.generate(qr, { small: true });
+app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
+  console.log("Servidor listo");
 });
 
-client.on("ready", () => {
-  console.log("WhatsApp listo");
-});
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState("./auth");
+  const { version } = await fetchLatestBaileysVersion();
 
-client.on("auth_failure", (msg) => {
-  console.log("Auth failure:", msg);
-});
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    logger: pino({ level: "silent" }),
+    browser: ["Arrow Store", "Chrome", "1.0"],
+    printQRInTerminal: false,
+    markOnlineOnConnect: false,
+    syncFullHistory: false
+  });
 
-client.on("disconnected", (reason) => {
-  console.log("Disconnected:", reason);
-});
+  sock.ev.on("creds.update", saveCreds);
 
-client.initialize();
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      qrDataUrl = await QRCode.toDataURL(qr);
+      console.log("QR actualizado");
+    }
+
+    if (connection === "open") {
+      console.log("WHATSAPP LISTO");
+    }
+
+    if (connection === "close") {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      console.log("Conexión cerrada:", code);
+
+      if (code !== DisconnectReason.loggedOut) {
+        startBot();
+      } else {
+        console.log("Sesión cerrada, toca volver a escanear.");
+      }
+    }
+  });
+
+  sock.ev.on("messages.upsert", async ({ messages }) => {
+    const msg = messages?.[0];
+    if (!msg || msg.key.fromMe) return;
+
+    const jid = msg.key.remoteJid;
+    const text =
+      msg.message?.conversation ||
+      msg.message?.extendedTextMessage?.text ||
+      msg.message?.imageMessage?.caption ||
+      "";
+
+    if (!text.trim()) return;
+
+    await sock.sendMessage(jid, { text: "Arrow IA activa: " + text }, { quoted: msg });
+  });
+}
+
+startBot();
