@@ -17,17 +17,21 @@ const client = new Client({
 });
 
 client.on('qr', (qr) => {
-    console.log('================ QR =================');
+    console.log('QR:');
     console.log(qr);
-    console.log('====================================');
 });
 
 client.on('ready', () => {
-    console.log('WhatsApp conectado');
+    console.log('WhatsApp listo');
 });
 
-client.on('auth_failure', msg => {
-    console.log('Error auth:', msg);
+client.on('disconnected', (reason) => {
+    console.log('Reconectando...', reason);
+    client.initialize();
 });
 
 client.initialize();
+
+setInterval(() => {
+    console.log('bot vivo');
+}, 10000);
